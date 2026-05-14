@@ -47,7 +47,7 @@ export function ConversionSidebarContent({ orgId }: { orgId: string }) {
       />
 
       {/* Actions */}
-      <div className="px-3 py-3 flex flex-col gap-2">
+      <div className="px-3 py-3 flex flex-col gap-2 border-t border-border">
         <span className="text-xs font-medium text-sidebar-foreground/50 uppercase tracking-wider px-1">
           Actions
         </span>

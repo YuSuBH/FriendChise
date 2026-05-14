@@ -253,7 +253,7 @@ export function AddTemplateForm({
                     onClick={() => selectTemplate(t.id)}
                     aria-pressed={isActive}
                     className={cn(
-                      "flex-1 flex items-center justify-between rounded-lg border px-3 py-2 cursor-pointer transition-colors",
+                      "flex-1 min-w-0 flex items-center rounded-lg border px-3 py-2 cursor-pointer transition-colors",
                       isDefault
                         ? isActive
                           ? "border-amber-500 bg-amber-100 dark:bg-amber-900/50"

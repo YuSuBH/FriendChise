@@ -20,7 +20,22 @@ export async function getConversionSets(orgId: string) {
   return prisma.conversionSet.findMany({
     where: { orgId },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true, updatedAt: true },
+    select: { id: true, name: true, updatedAt: true, _count: { select: { templates: true } } },
+  });
+}
+
+/** Returns the N most recently updated templates across all sets for an org. */
+export async function getRecentConversionTemplates(orgId: string, limit = 3) {
+  return prisma.conversionTemplate.findMany({
+    where: { set: { orgId } },
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      name: true,
+      updatedAt: true,
+      set: { select: { id: true, name: true } },
+    },
   });
 }
 

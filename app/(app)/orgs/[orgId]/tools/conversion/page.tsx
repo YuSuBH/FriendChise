@@ -1,6 +1,6 @@
 import { requireOrgMemberPage } from "@/lib/authz";
 import { RegisterPageSidebar } from "@/components/layout/page-sidebar-context";
-import { getConversionSets } from "@/lib/services/tools";
+import { getConversionSets, getRecentConversionTemplates } from "@/lib/services/tools";
 import { ConversionSidebarContent } from "./_components/conversion-sidebar-content";
 import { ConversionClient } from "./conversion-client";
 
@@ -12,14 +12,17 @@ export default async function ConversionPage({
   const { orgId } = await params;
   await requireOrgMemberPage(orgId);
 
-  const sets = await getConversionSets(orgId);
+  const [sets, recentTemplates] = await Promise.all([
+    getConversionSets(orgId),
+    getRecentConversionTemplates(orgId, 3),
+  ]);
 
   return (
     <>
       <RegisterPageSidebar
         content={<ConversionSidebarContent orgId={orgId} />}
       />
-      <ConversionClient orgId={orgId} sets={sets} />
+      <ConversionClient orgId={orgId} sets={sets} recentTemplates={recentTemplates} />
     </>
   );
 }
