@@ -109,9 +109,12 @@ export function RosterPageClient({
     [],
   );
 
-  // Fetch any weeks in the visible window (plus buffer) that haven't been loaded yet
+  // Returns any weeks in the visible window (plus buffer) that haven't been
+  // loaded yet, fetches them, and returns the new entries.
+  // Does NOT call setAllEntries — the effect below does that so setState is
+  // never called synchronously inside an effect body.
   const fetchMissingWeeks = useCallback(
-    async (anchor: Date) => {
+    async (anchor: Date): Promise<RosterEntryRow[]> => {
       const needed: Date[] = [];
       for (let i = -PREFETCH_BUFFER; i < WEEKS_SHOWN + PREFETCH_BUFFER; i++) {
         const w = addWeeks(anchor, i);
@@ -120,31 +123,33 @@ export function RosterPageClient({
           loadedWeekMs.add(w.getTime()); // mark immediately to avoid duplicate fetches
         }
       }
-      if (needed.length === 0) return;
+      if (needed.length === 0) return [];
 
       const weeksParam = needed.map((d) => d.toISOString()).join(",");
       try {
         const res = await fetch(
           `/api/orgs/${orgId}/roster-entries?weeks=${encodeURIComponent(weeksParam)}`,
         );
-        if (!res.ok) return;
+        if (!res.ok) return [];
         // API returns dates as ISO strings — rehydrate weekStart to Date
         const raw: (Omit<RosterEntryRow, "weekStart"> & { weekStart: string })[] =
           await res.json();
-        const fetched: RosterEntryRow[] = raw.map((e) => ({
-          ...e,
-          weekStart: new Date(e.weekStart),
-        }));
-        setAllEntries((prev) => [...prev, ...fetched]);
+        return raw.map((e) => ({ ...e, weekStart: new Date(e.weekStart) }));
       } catch {
-        // silently ignore — board will just show empty cells
+        return [];
       }
     },
     [orgId, loadedWeekMs],
   );
 
   useEffect(() => {
-    fetchMissingWeeks(anchorMonday);
+    let active = true;
+    fetchMissingWeeks(anchorMonday).then((fetched) => {
+      if (active && fetched.length > 0) {
+        setAllEntries((prev) => [...prev, ...fetched]);
+      }
+    });
+    return () => { active = false; };
   }, [anchorMonday, fetchMissingWeeks]);
 
   return (
