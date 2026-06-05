@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Plus, ChevronRight, GripVertical, Layers } from "lucide-react";
+import { CalendarDays, Plus, ChevronRight, GripVertical, Layers, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -66,6 +66,159 @@ export interface CalendarViewProps {
   onSelectedTaskIdChange?: (id: string | null) => void;
   /** Called when the empty-state "Add task" button is tapped (opens task panel Sheet). */
   onOpenTaskPanel?: () => void;
+  /** Optional external dragging state controlled by parent. */
+  isDraggingExternal?: boolean;
+}
+
+function GroupSidebarComponent({
+  ids,
+  orgId,
+  memberships,
+  canManage,
+  dragDataRef,
+  getTaskColor,
+  openEditForInst,
+  todayStr,
+  initialInstances,
+}: {
+  ids: string[];
+  orgId: string;
+  memberships?: ClientMembership[] | undefined;
+  canManage: boolean;
+  dragDataRef: React.RefObject<
+    | { type: "task"; taskId: string }
+    | { type: "move"; instanceId: string; offsetMin: number }
+    | {
+        type: "group";
+        instanceIds: string[];
+        instances?: ClientTimetableInstance[];
+        groupStartMin: number;
+        offsetMin: number;
+      }
+    | null
+  >;
+  getTaskColor: (inst: ClientTimetableInstance) => string;
+  openEditForInst: (inst: ClientTimetableInstance) => void;
+  todayStr: string;
+  /** Optional server-provided instances to avoid refetching */
+  initialInstances?: ClientTimetableInstance[];
+}) {
+  const [loading, setLoading] = useState(initialInstances ? false : true);
+  const [currentGroup, setCurrentGroup] = useState<ClientTimetableInstance[]>(initialInstances ?? []);
+  const router = useRouter();
+
+  const idsKey = ids.join(",");
+  useEffect(() => {
+    if (initialInstances) return; // server provided data — skip fetch
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetchTimetableInstancesAction(orgId, ids);
+        if (!mounted) return;
+        if (!res.ok) {
+          toast.error(res.error ?? "Failed to load group");
+          setCurrentGroup([]);
+          return;
+        }
+        const fetched = (res.data ?? []) as unknown as ClientTimetableInstance[];
+        const byId = new Map<string, ClientTimetableInstance>(
+          fetched.map((i) => [i.id, i]),
+        );
+        const ordered = ids
+          .map((id) => byId.get(id))
+          .filter((i): i is ClientTimetableInstance => i !== undefined && i !== null);
+        setCurrentGroup(ordered);
+      } catch (error) {
+        if (!mounted) return;
+        toast.error(error instanceof Error ? error.message : "Failed to load group");
+        setCurrentGroup([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [idsKey, ids, orgId, initialInstances]);
+
+  if (loading)
+    return (
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-3">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="rounded-lg border bg-card px-3 py-2.5 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <Skeleton className="w-3 h-3 rounded-full" />
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-2/3 mb-1" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="flex flex-col gap-2 p-3">
+      {currentGroup.map((inst) => {
+        const assigneeNames = inst.assignees
+          .map((a) => a.membership.user?.name ?? a.membership.botName ?? "Bot")
+          .join(", ");
+        const dotClass = statusDotClass(inst.status === "TODO" && inst.date < todayStr ? "SKIPPED" : inst.status);
+        return (
+          <div
+            key={inst.id}
+            draggable={canManage}
+            onDragStart={(e) => {
+              dragDataRef.current = { type: "move", instanceId: inst.id, offsetMin: 0 };
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            onDragEnd={() => {
+              dragDataRef.current = null;
+            }}
+            className={`flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5 hover:bg-accent/40 transition-colors ${
+              canManage ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+            }`}
+            onClick={() => openEditForInst(inst)}
+          >
+            {canManage && <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/40" />}
+            <span className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: getTaskColor(inst) }} />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate block">{inst.task.title}</div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {minToHHMM(inst.startTimeMin)}&ndash;{minToHHMM(inst.startTimeMin + inst.task.durationMin)}
+                </span>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
+                <span className="text-[10px] text-muted-foreground">
+                  {STATUS_LABELS[inst.status === "TODO" && inst.date < todayStr ? "SKIPPED" : inst.status]}
+                </span>
+              </div>
+              {assigneeNames && <div className="text-[10px] text-muted-foreground mt-0.5 truncate">{assigneeNames}</div>}
+            </div>
+            {memberships && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/orgs/${orgId}/tasks/${inst.taskId}?ref=timetable`);
+                }}
+                aria-label="Open task"
+                className="h-6 w-6 flex items-center justify-center text-muted-foreground/60 hover:text-muted-foreground/90"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function CalendarView({
@@ -85,6 +238,7 @@ export function CalendarView({
   selectedTaskId = null,
   onSelectedTaskIdChange,
   onOpenTaskPanel,
+  isDraggingExternal,
 }: CalendarViewProps) {
   function effStatus(inst: ClientTimetableInstance) {
     return inst.status === "TODO" && inst.date < todayStr
@@ -93,6 +247,9 @@ export function CalendarView({
   }
   const router = useRouter();
   const [isDropPending, startT] = useTransition();
+
+  // Dragging state is controlled externally via `isDraggingExternal`.
+  const effectiveIsDragging = typeof isDraggingExternal === "boolean" ? isDraggingExternal : false;
 
   // Track the actual calendar container width via ResizeObserver so that
   // zoom level, sidebar state, and task panel are all accounted for.
@@ -158,14 +315,58 @@ export function CalendarView({
     column: string;
     timeMin: number;
   } | null>(null);
-  const { open: openSidebar, close: closeSidebar } = useActionSidebar();
+  const { open: openSidebar, close: closeSidebar, activeTitle } = useActionSidebar();
+  // Track the slot (date + time range) of the currently open group sidebar.
+  // We store the slot (not the original instance ids) so that when the
+  // `instances` prop updates we can re-derive membership by overlap. This
+  // ensures items moved out of the slot are excluded and items moved into
+  // the slot are included automatically.
+  const openGroupSlotRef = useRef<{ date: string; startMin: number; endMin: number } | null>(null);
+  const lastGroupTitleRef = useRef<string | null>(null);
+  const lastEditTitleRef = useRef<string | null>(null);
+  const lastEditDateRef = useRef<string | null>(null);
   const { hourHeight } = useTimetableZoom();
 
-  // Consistent color helpers: prefer the instance's `taskColor` computed
-  // server-side; fall back to a sensible grey for UI elements that need
-  // a concrete color value.
-  const getTaskColor = (inst: ClientTimetableInstance) => inst.taskColor ?? "#9ca3af";
-  const getTaskColorMaybe = (inst: ClientTimetableInstance) => inst.taskColor ?? undefined;
+  // Clear the stored open group slot if the sidebar is closed or a different
+  // panel is active. This prevents accidental re-opening on `instances`
+  // refresh when the user has dismissed or replaced the group panel.
+  useEffect(() => {
+    if (!activeTitle) {
+      openGroupSlotRef.current = null;
+      lastGroupTitleRef.current = null;
+      lastEditTitleRef.current = null;
+      lastEditDateRef.current = null;
+      return;
+    }
+    if (lastGroupTitleRef.current && activeTitle !== lastGroupTitleRef.current) {
+      openGroupSlotRef.current = null;
+      lastGroupTitleRef.current = null;
+    }
+    if (lastEditTitleRef.current && activeTitle !== lastEditTitleRef.current) {
+      lastEditTitleRef.current = null;
+      lastEditDateRef.current = null;
+    }
+  }, [activeTitle]);
+
+  // Precompute a map for fast lookups of the server-provided roleColor.
+  const taskRoleColorMap = useMemo(
+    () =>
+      new Map<string, string | null>(
+        (availableTasks ?? []).map((t) => [t.id, t.roleColor ?? null] as [string, string | null]),
+      ),
+    [availableTasks],
+  );
+
+  // Consistent color helpers: prefer the server-selected `roleColor` from
+  // `availableTasks`, then the instance snapshot `taskColor`, then fallbacks.
+  const getTaskColor = (inst: ClientTimetableInstance) => {
+    const fromTasks = taskRoleColorMap.get(inst.taskId);
+    return fromTasks ?? inst.taskColor ?? "#9ca3af";
+  };
+  const getTaskColorMaybe = (inst: ClientTimetableInstance) => {
+    const fromTasks = taskRoleColorMap.get(inst.taskId);
+    return fromTasks ?? inst.taskColor ?? undefined;
+  };
 
   function openEditSidebar(
     inst: ClientTimetableInstance,
@@ -188,164 +389,100 @@ export function CalendarView({
     );
   }
 
-    function GroupSidebar({ ids }: { ids: string[] }) {
-      const [loading, setLoading] = useState(true);
-      const [currentGroup, setCurrentGroup] = useState<ClientTimetableInstance[]>([]);
-
-      const idsKey = ids.join(",");
-      useEffect(() => {
-        let mounted = true;
-        (async () => {
-          try {
-            const res = await fetchTimetableInstancesAction(orgId, ids);
-            if (!mounted) return;
-            if (!res.ok) {
-              toast.error(res.error ?? "Failed to load group");
-              setCurrentGroup([]);
-              return;
-            }
-            // cast the returned shape to the client instance shape
-            const fetched = (res.data ?? []) as unknown as ClientTimetableInstance[];
-            // Reorder fetched instances to match the requested `ids` order so the
-            // ActionSidebar displays rows in the same order as the calendar's
-            // group block. The server may return instances in arbitrary order,
-            // so map them by id and then rebuild the array using `ids`.
-            const byId = new Map<string, ClientTimetableInstance>(
-              fetched.map((i) => [i.id, i]),
-            );
-            const ordered = ids.map((id) => byId.get(id)).filter(Boolean) as ClientTimetableInstance[];
-            setCurrentGroup(ordered);
-          } catch (error) {
-            if (!mounted) return;
-            toast.error(error instanceof Error ? error.message : "Failed to load group");
-            setCurrentGroup([]);
-          } finally {
-            if (mounted) {
-              setLoading(false);
-            }
-          }
-        })();
-        return () => {
-          mounted = false;
-        };
-      }, [idsKey, ids]);
-
-      if (loading)
-        return (
-          <div className="p-3">
-            <div className="flex items-center justify-between mb-3">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-4 w-16" />
-            </div>
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="rounded-lg border bg-card px-3 py-2.5 shadow-sm">
-                  <div className="flex items-start gap-2.5">
-                    <Skeleton className="w-3 h-3 rounded-full" />
-                    <div className="flex-1">
-                      <Skeleton className="h-4 w-2/3 mb-1" />
-                      <Skeleton className="h-3 w-1/3" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-
-      return (
-        <div className="flex flex-col gap-2 p-3">
-            {currentGroup.map((inst) => {
-            const assigneeNames = inst.assignees
-              .map(
-                (a) =>
-                  a.membership.user?.name ??
-                  a.membership.botName ??
-                  "Bot",
-              )
-              .join(", ");
-            const dotClass = statusDotClass(
-              inst.status === "TODO" && inst.date < todayStr
-                ? "SKIPPED"
-                : inst.status,
-            );
-            // Determine a display color for the instance stripe. Prefer the
-            // first assignee's first role color (if available from the
-            // `memberships` prop), otherwise fall back to the instance's
-            // `taskColor` (which may itself be role-derived) and finally
-            // to a sensible default.
-            return (
-              <div
-                key={inst.id}
-                draggable={canManage}
-                onDragStart={(e) => {
-                  dragDataRef.current = {
-                    type: "move",
-                    instanceId: inst.id,
-                    offsetMin: 0,
-                  };
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onDragEnd={closeSidebar}
-                className={`flex items-start gap-2.5 rounded-lg border bg-card px-3 py-2.5 hover:bg-accent/40 transition-colors ${canManage ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
-                onClick={() => openEditSidebar(inst, () => openGroupSidebar(ids))}
-              >
-                {canManage && (
-                  <GripVertical className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground/40" />
-                )}
-                <span
-                  className="w-1 self-stretch rounded-full shrink-0 mt-0.5"
-                  style={{ backgroundColor: getTaskColor(inst) }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate block">
-                    {inst.task.title}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] font-mono text-muted-foreground">
-                      {minToHHMM(inst.startTimeMin)}&ndash;
-                      {minToHHMM(inst.startTimeMin + inst.task.durationMin)}
-                    </span>
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
-                    <span className="text-[10px] text-muted-foreground">
-                      {STATUS_LABELS[
-                        inst.status === "TODO" && inst.date < todayStr
-                          ? "SKIPPED"
-                          : inst.status
-                      ]}
-                    </span>
-                  </div>
-                  {assigneeNames && (
-                    <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                      {assigneeNames}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-
   function openGroupSidebar(groupInstancesOrIds: ClientTimetableInstance[] | string[]) {
-    const ids =
+    const groupInsts: ClientTimetableInstance[] =
       typeof groupInstancesOrIds[0] === "string"
         ? (groupInstancesOrIds as string[])
-        : (groupInstancesOrIds as ClientTimetableInstance[]).map((i) => i.id);
-    // Compute a best-effort title using currently loaded instances (may be stale)
-    const currentGroup = ids
-      .map((id) => instances.find((i) => i.id === id))
-      .filter(Boolean) as ClientTimetableInstance[];
+            .map((id) => instances.find((i) => i.id === id))
+            .filter((i): i is ClientTimetableInstance => i !== undefined)
+        : (groupInstancesOrIds as ClientTimetableInstance[]);
 
-    const groupStart = currentGroup.length ? Math.min(...currentGroup.map((i) => i.startTimeMin)) : 0;
-    const groupEnd = currentGroup.length ? Math.max(...currentGroup.map((i) => i.startTimeMin + i.task.durationMin)) : 0;
+    if (groupInsts.length === 0) return;
 
-    openSidebar(
-      `${ids.length} overlapping${currentGroup.length ? ` · ${minToHHMM(groupStart)}–${minToHHMM(groupEnd)}` : ""}`,
-      <GroupSidebar ids={ids} />,
-    );
+    const groupStart = Math.min(...groupInsts.map((i) => i.startTimeMin));
+    const groupEnd = Math.max(...groupInsts.map((i) => i.startTimeMin + i.task.durationMin));
+    const ids = groupInsts.map((i) => i.id);
+
+    // Store the canonical slot for this opened group. This tells the effect
+    // which date and time-range to re-evaluate against the fresh `instances`
+    // whenever `CalendarView` receives updated data (via `router.refresh()`).
+    // We intentionally store the slot instead of ids so the group reflects
+    // the current contents of that timeslot rather than the original snapshot.
+    openGroupSlotRef.current = { date: groupInsts[0].date, startMin: groupStart, endMin: groupEnd };
+      const title = `${ids.length} overlapping · ${minToHHMM(groupStart)}–${minToHHMM(groupEnd)}`;
+      lastGroupTitleRef.current = title;
+      openSidebar(
+        title,
+        <GroupSidebarComponent
+          ids={ids}
+          initialInstances={groupInsts}
+          orgId={orgId}
+          memberships={memberships}
+          canManage={canManage}
+          dragDataRef={dragDataRef}
+          getTaskColor={getTaskColor}
+          openEditForInst={(inst: ClientTimetableInstance) =>
+            openEditSidebar(inst)
+          }
+          todayStr={todayStr}
+        />,
+      );
   }
+
+  // Re-open the group sidebar with fresh data whenever `instances` changes
+  // (triggered by `router.refresh()` after mutations). The effect below:
+  // 1) reads the saved slot from `openGroupSlotRef.current` (if any)
+  // 2) re-derives the current members of that slot by checking overlap
+  //    against the fresh `instances` prop
+  // 3) calls `openSidebar(...)` with a new `key` to force remounting the
+  //    `GroupSidebarComponent` so its own fetch runs and the UI updates.
+  //
+  // Using slot-overlap (date + time range) rather than stored ids ensures:
+  // - items moved out of the original group are not shown
+  // - items moved into the same slot are included
+  // - deleted items disappear
+
+  useEffect(() => {
+    const slot = openGroupSlotRef.current;
+    if (!slot) return;
+
+    const freshGroup = instances.filter(
+      (i) =>
+        i.date === slot.date &&
+        i.startTimeMin < slot.endMin &&
+        i.startTimeMin + i.task.durationMin > slot.startMin,
+    );
+
+    if (freshGroup.length === 0) {
+      openGroupSlotRef.current = null;
+      closeSidebar();
+      return;
+    }
+
+    const freshIds = freshGroup.map((i) => i.id);
+    const freshStart = Math.min(...freshGroup.map((i) => i.startTimeMin));
+    const freshEnd = Math.max(...freshGroup.map((i) => i.startTimeMin + i.task.durationMin));
+
+    const title = `${freshIds.length} overlapping · ${minToHHMM(freshStart)}–${minToHHMM(freshEnd)}`;
+    lastGroupTitleRef.current = title;
+    openSidebar(
+      title,
+      <GroupSidebarComponent
+        key={freshGroup.map((i) => `${i.id}:${i.startTimeMin}:${i.date}`).join(",")}
+        ids={freshIds}
+        initialInstances={freshGroup}
+        orgId={orgId}
+        memberships={memberships}
+        canManage={canManage}
+        dragDataRef={dragDataRef}
+        getTaskColor={getTaskColor}
+        openEditForInst={(inst: ClientTimetableInstance) =>
+          openEditSidebar(inst, () => openGroupSidebar(freshIds))
+        }
+        todayStr={todayStr}
+      />,
+    );
+  }, [instances]); // eslint-disable-line react-hooks/exhaustive-deps
 
   type PendingDrop =
     | { kind: "drop"; col: string; timeMin: number; data: DragData }
@@ -392,15 +529,45 @@ export function CalendarView({
           timeMin,
         );
         if (!result.ok) { toast.error(result.error ?? "Something went wrong"); return; }
+        // If the server returned the created instance, open the ActionSidebar
+        // immediately so the user can edit assignees/schedule. Also highlight
+        // the target column while the panel is open.
+        if (result.data) {
+          const inst = result.data;
+          const title = inst.task.title;
+          lastEditTitleRef.current = title;
+          lastEditDateRef.current = inst.date;
+          openSidebar(
+            title,
+            <CalendarEditSidebarContent
+              key={inst.id}
+              instance={inst}
+              memberships={memberships ?? []}
+              orgId={orgId}
+              canManage={canManage}
+              onClose={() => {
+                closeSidebar();
+                lastEditDateRef.current = null;
+              }}
+              onRefresh={() => router.refresh()}
+              router={router}
+              todayStr={todayStr}
+            />,
+          );
+        }
       } else if (data.type === "group") {
         let delta = timeMin - data.groupStartMin;
         const insts = data.instances ?? data.instanceIds.map((id) => instances.find((i) => i.id === id)).filter(Boolean) as ClientTimetableInstance[];
-        // Compute the maximum allowed delta to prevent any member from exceeding 1439
-        const maxDelta = 1439 - Math.max(...insts.map(i => i.startTimeMin));
+        // Compute allowed delta range to prevent any member from moving outside
+        // the org's open/close hours (falls back to full-day bounds).
+        const minAllowed = openTimeMin ?? 0;
+        const maxAllowed = (closeTimeMin ?? 1440);
+        const minDelta = Math.max(...insts.map(i => minAllowed - i.startTimeMin));
+        const maxDelta = Math.min(...insts.map(i => maxAllowed - (i.startTimeMin + (i.task?.durationMin ?? 0))));
         const originalDelta = delta;
-        delta = Math.max(0, Math.min(delta, maxDelta));
-        if (originalDelta !== delta && originalDelta > maxDelta) {
-          toast("Drop was adjusted to prevent tasks from moving past midnight", { duration: 3000 });
+        delta = Math.max(minDelta, Math.min(delta, maxDelta));
+        if (originalDelta !== delta) {
+          toast("Drop was adjusted to prevent tasks moving outside allowed hours", { duration: 3000 });
         }
         const updates = insts.map((inst) => ({ entryId: inst.id, startTimeMin: inst.startTimeMin + delta, dateStr: col }));
         const result = await updateTimetableEntriesBatchAction(orgId, updates);
@@ -424,7 +591,10 @@ export function CalendarView({
       setPendingDrop({ kind: "drop", col, timeMin, data });
       return;
     }
-    executeDrop(col, timeMin, data);
+    const minAllowed = openTimeMin ?? 0;
+    const maxAllowed = (closeTimeMin ?? 1440) - 1;
+    const clampedTime = Math.max(minAllowed, Math.min(maxAllowed, timeMin));
+    executeDrop(col, clampedTime, data);
   }
 
   // Place a new task at a specific column/time (used for tap-to-place on mobile).
@@ -491,7 +661,9 @@ export function CalendarView({
             return (
               !hasVisibleInstances &&
               !dragOver &&
-              !selectedTaskId && (
+              !selectedTaskId &&
+              !isDropPending &&
+              !effectiveIsDragging && (
                 <div className="absolute inset-0 z-20 flex items-center justify-center border bg-background/90">
                   <div className="flex flex-col items-center gap-3 text-center">
                     <CalendarDays className="h-10 w-10 text-muted-foreground/40" />
@@ -591,11 +763,13 @@ export function CalendarView({
             initialScrollMin={initialScrollMin}
             fillHeight={fillHeight}
             hourHeight={hourHeight}
-            columnHighlightClass={(dayStr) =>
-              dayStr === todayStr
-                ? "bg-primary/[0.04] text-foreground"
-                : undefined
-            }
+            columnHighlightClass={(dayStr) => {
+              if (dayStr === todayStr) return "bg-primary/[0.04] text-foreground";
+              if (lastEditDateRef.current && lastEditTitleRef.current && activeTitle === lastEditTitleRef.current && dayStr === lastEditDateRef.current) {
+                return "bg-primary/10 ring-1 ring-primary/40 text-foreground";
+              }
+              return undefined;
+            }}
             blockColor={(inst) => getTaskColorMaybe(inst)}
             openTimeMin={openTimeMin}
             closeTimeMin={closeTimeMin}
@@ -658,56 +832,53 @@ export function CalendarView({
                     )}
                   </div>
 
-                  {/* Per-task rows */}
+                  {/* Per-task rows (shared rendering, wrapper differs for scrolling) */}
                   {(() => {
                     const MAX_VISIBLE = 5;
                     const ROW_PX = 36; // estimated per-row height
                     const HEADER_PAD = 36; // estimated header + padding
-                    if (instances.length <= MAX_VISIBLE) {
+
+                    const rows = instances.map((inst) => {
+                      const effectiveStatus =
+                        inst.status === "TODO" && inst.date < todayStr
+                          ? "SKIPPED"
+                          : inst.status;
+                      const assigneeNames = inst.assignees
+                        .map((a) =>
+                          (
+                            a.membership.user?.name ??
+                            a.membership.botName ??
+                            "Bot"
+                          ).split(" ")[0],
+                        )
+                        .join(", ");
                       return (
-                        <div className="flex flex-col gap-1 overflow-hidden">
-                          {instances.map((inst) => {
-                            const effectiveStatus =
-                              inst.status === "TODO" && inst.date < todayStr
-                                ? "SKIPPED"
-                                : inst.status;
-                            const assigneeNames = inst.assignees
-                              .map((a) =>
-                                (
-                                  a.membership.user?.name ??
-                                  a.membership.botName ??
-                                  "Bot"
-                                ).split(" ")[0],
-                              )
-                              .join(", ");
-                            return (
-                              <div key={inst.id} className="flex items-start gap-1 min-w-0">
-                                {/* Task color identity stripe */}
-                                <span
-                                  className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5"
-                                  style={{ backgroundColor: getTaskColor(inst) }}
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1 min-w-0">
-                                    {/* Status dot */}
-                                    <span
-                                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDotClass(effectiveStatus)}`}
-                                    />
-                                    <span className="text-[10px] font-semibold truncate leading-tight">
-                                      {inst.task.title}
-                                    </span>
-                                  </div>
-                                  {assigneeNames && (
-                                    <span className="text-[9px] text-muted-foreground/70 truncate leading-tight block pl-2.5">
-                                      {assigneeNames}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
+                        <div key={inst.id} className="flex items-start gap-1 min-w-0">
+                          <span
+                            className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5"
+                            style={{ backgroundColor: getTaskColor(inst) }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDotClass(effectiveStatus)}`}
+                              />
+                              <span className="text-[10px] font-semibold truncate leading-tight">
+                                {inst.task.title}
+                              </span>
+                            </div>
+                            {assigneeNames && (
+                              <span className="text-[9px] text-muted-foreground/70 truncate leading-tight block pl-2.5">
+                                {assigneeNames}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       );
+                    });
+
+                    if (instances.length <= MAX_VISIBLE) {
+                      return <div className="flex flex-col gap-1 overflow-hidden">{rows}</div>;
                     }
 
                     // instances.length > MAX_VISIBLE -> compute a maxHeight
@@ -719,44 +890,7 @@ export function CalendarView({
 
                     return (
                       <div style={{ maxHeight: `${maxContentHeight}px`, overflowY: "auto" }} className="flex flex-col gap-1">
-                        {instances.map((inst) => {
-                          const effectiveStatus =
-                            inst.status === "TODO" && inst.date < todayStr
-                              ? "SKIPPED"
-                              : inst.status;
-                          const assigneeNames = inst.assignees
-                            .map((a) =>
-                              (
-                                a.membership.user?.name ??
-                                a.membership.botName ??
-                                "Bot"
-                              ).split(" ")[0],
-                            )
-                            .join(", ");
-                          return (
-                            <div key={inst.id} className="flex items-start gap-1 min-w-0">
-                              <span
-                                className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5"
-                                style={{ backgroundColor: getTaskColor(inst) }}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1 min-w-0">
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDotClass(effectiveStatus)}`}
-                                  />
-                                  <span className="text-[10px] font-semibold truncate leading-tight">
-                                    {inst.task.title}
-                                  </span>
-                                </div>
-                                {assigneeNames && (
-                                  <span className="text-[9px] text-muted-foreground/70 truncate leading-tight block pl-2.5">
-                                    {assigneeNames}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                        {rows}
                       </div>
                     );
                   })()}
@@ -813,7 +947,10 @@ export function CalendarView({
                 setPendingDrop(null);
                 setSuppressDrop(false);
                 if (p.kind === "drop") {
-                  executeDrop(p.col, p.timeMin, p.data);
+                  const minAllowed = openTimeMin ?? 0;
+                  const maxAllowed = (closeTimeMin ?? 1440) - 1;
+                  const clampedTime = Math.max(minAllowed, Math.min(maxAllowed, p.timeMin));
+                  executeDrop(p.col, clampedTime, p.data);
                 } else {
                   executeTap(p.col, p.timeMin, p.taskId);
                 }
