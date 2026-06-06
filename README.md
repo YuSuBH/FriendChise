@@ -16,17 +16,59 @@ Production deployment: **[friendchise.app](https://friendchise.app)**
 
 ## Screenshots
 
-| Dashboard | Timetable |
-|-----------|-----------|
-| ![Dashboard](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Org%20Overview%20Page.png) | ![Timetable](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Timetable%20Calender%20Mode.png) |
+### Organizations Hub
 
-| Task Library (card view) | Task Comments & Voting |
-|--------------------------|------------------------|
-| ![Task Cards](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Tasks%20Card%20Mode.jpg) | ![Task Comments](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Task%20Comments.png) |
+![Organizations Hub](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Organizations%20hub%20page.png)
 
-| Staff Roster | Conversion Tool |
-|--------------|-----------------|
-| ![Roster](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Roster%20List.png) | ![Conversion](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Conversion%20Entries.png) |
+Multi-tenant org picker.
+
+### Dashboard
+
+![Dashboard](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Org%20Overview%20Page.png)
+
+Today's schedule, stats, and recent tools.
+
+### Timetable
+
+![Timetable](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Timetable%20Calender%20Mode.png)
+
+Weekly calendar with colour-coded task blocks.
+
+### Timetable (Simple List)
+
+![Timetable Simple](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Calender%20Simple%20Mode.png)
+
+Simple list view with assignees and status.
+
+### Roles
+
+![Roles](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Settings%20role%20page.png)
+
+Permission system with per-role task eligibility.
+
+### Members
+
+![Members](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Member%20List%20Card%20Mode.png)
+
+Card view with roles and bot slot members.
+
+### Tools Hub
+
+![Tools Hub](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Tools%20Page.png)
+
+Pluggable operational tools.
+
+### Conversion Tool
+
+![Conversion](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Conversion%20Entries.png)
+
+Ingredient scaling by batch.
+
+### Staff Roster
+
+![Roster](https://ivantran-2001.github.io/projects/pictures/friendchise/V2/Roster%20List.png)
+
+Multi-week staff shift scheduling.
 
 ## Tech Stack
 
