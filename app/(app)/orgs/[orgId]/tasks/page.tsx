@@ -1,5 +1,6 @@
 import { getRoles } from "@/lib/services/roles";
 import { getOrgTags } from "@/lib/services/tags";
+import { getTasksPaginated } from "@/lib/services/tasks";
 import { requireOrgMemberPage } from "@/lib/authz";
 import {
   getOrgMembership,
@@ -9,9 +10,7 @@ import {
 import { PermissionAction } from "@prisma/client";
 import { cookies } from "next/headers";
 
-import { RegisterPageSidebarSubContent } from "@/components/layout/page-sidebar-context";
-import { TaskTable } from "./_components/task-table";
-import { TasksSidebarContent } from "./_components/tasks-sidebar-content";
+import { TasksPageClient } from "./_components/tasks-page-client";
 import { SORT_OPTIONS, type SortOption } from "./_components/tasks-config";
 
 /**
@@ -125,35 +124,28 @@ const TasksPage = async ({
         ? (savedPrefs!.tagId as string)
         : null;
 
+  const initialTasksPage = await getTasksPaginated(orgId, mode, {
+    sort,
+    roleId: roleId ?? undefined,
+    tagId: tagId ?? undefined,
+  });
+
   return (
-    <>
-      <RegisterPageSidebarSubContent
-        content={
-          <TasksSidebarContent
-            orgId={orgId}
-            roles={roles}
-            tags={tags}
-            canManageTasks={canManageTasks}
-            sort={sort}
-            roleId={roleId}
-            tagId={tagId}
-            view={view}
-            mode={mode}
-            isModeExplicit={isModeExplicit}
-            isFiltersExplicit={isFiltersExplicit}
-          />
-        }
-      />
-      <TaskTable
-        orgId={orgId}
-        mode={mode}
-        canManageTasks={canManageTasks}
-        sort={sort}
-        filterRoleId={roleId}
-        filterTagId={tagId}
-        view={view}
-      />
-    </>
+    <TasksPageClient
+      orgId={orgId}
+      roles={roles}
+      tags={tags}
+      canManageTasks={canManageTasks}
+      sort={sort}
+      roleId={roleId}
+      tagId={tagId}
+      view={view}
+      mode={mode}
+      isModeExplicit={isModeExplicit}
+      isFiltersExplicit={isFiltersExplicit}
+      initialTasks={initialTasksPage.tasks}
+      initialNextCursor={initialTasksPage.nextCursor}
+    />
   );
 };
 

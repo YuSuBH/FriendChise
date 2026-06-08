@@ -35,10 +35,6 @@ interface TimetableSidebarContentProps {
   roles: { id: string; name: string; color: string | null }[];
   tags: { id: string; name: string; color: string }[];
   selectedTagId: string | null;
-  calendarHref: string;
-  simpleHref: string;
-  dayHref: string;
-  weekHref: string;
   canManage: boolean;
   templates: TemplateOption[];
   todayStr: string;
@@ -50,14 +46,19 @@ interface TimetableSidebarContentProps {
   isSpanExplicit: boolean;
   /** True when the URL has at least one of roleId / tagId. */
   isFiltersExplicit: boolean;
+  onModeChange: (mode: "calendar" | "simple") => void;
+  onSpanChange: (span: "day" | "week") => void;
 }
 
 function ZoomSlider() {
   const { hourHeight, setHourHeight } = useTimetableZoom();
+
   return (
-    <div className="px-1 mt-3">
-      <div className="flex items-center justify-between mb-1">
-        <label htmlFor="hour-height-slider" className="text-xs text-muted-foreground">Hour height</label>
+    <div className="mt-3 px-1">
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <label htmlFor="hour-height-slider" className="text-xs font-medium text-muted-foreground">
+          Zoom
+        </label>
         <span className="text-xs tabular-nums text-muted-foreground">{hourHeight}px</span>
       </div>
       <input
@@ -67,7 +68,7 @@ function ZoomSlider() {
         max={MAX_HOUR_HEIGHT}
         value={hourHeight}
         onChange={(e) => setHourHeight(Number(e.target.value))}
-        className="w-full accent-primary"
+        className="h-2 w-full cursor-pointer accent-primary"
       />
     </div>
   );
@@ -82,10 +83,6 @@ export function TimetableSidebarContent({
   roles,
   tags,
   selectedTagId,
-  calendarHref,
-  simpleHref,
-  dayHref,
-  weekHref,
   canManage,
   templates,
   todayStr,
@@ -94,6 +91,8 @@ export function TimetableSidebarContent({
   isModeExplicit,
   isSpanExplicit,
   isFiltersExplicit,
+  onModeChange,
+  onSpanChange,
 }: TimetableSidebarContentProps) {
   const router = useRouter();
   const PREFS_KEY = `timetable-prefs-${orgId}`;
@@ -271,12 +270,14 @@ export function TimetableSidebarContent({
           View
         </p>
         <TimetableViewPicker
+          orgId={orgId}
+          anchor={anchor}
           mode={mode}
           span={span}
-          calendarHref={calendarHref}
-          simpleHref={simpleHref}
-          dayHref={dayHref}
-          weekHref={weekHref}
+          roleId={selectedRoleId}
+          tagId={selectedTagId}
+          onModeChange={onModeChange}
+          onSpanChange={onSpanChange}
           className="flex-col items-start"
         />
         {mode === "calendar" && <ZoomSlider />}

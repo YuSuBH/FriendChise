@@ -7,85 +7,139 @@
  *  - Calendar / Simple  (mode)
  *  - Day / Week         (span)
  *
- * All state is URL-driven — switching calls `router.push()` with the new
- * href, so mode/span persist across navigation and page refreshes.
- * A `useTransition` keeps the button interactive while the navigation is
- * pending.
- *
- * Accepts an optional `className` for layout adjustments (e.g. `flex-col
- * items-start` when rendered in a narrow sidebar vs. the toolbar).
+ * The picker updates the URL in place and notifies the parent so the view
+ * switches immediately without a route navigation.
  */
-import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { CalendarDays, CalendarRange, Calendar, List } from "lucide-react";
 
 interface TimetableViewPickerProps {
+  orgId?: string;
+  anchor?: string;
   mode: "calendar" | "simple";
   span: "day" | "week";
-  calendarHref: string;
-  simpleHref: string;
-  dayHref: string;
-  weekHref: string;
+  roleId?: string | null;
+  tagId?: string | null;
+  calendarHref?: string;
+  simpleHref?: string;
+  dayHref?: string;
+  weekHref?: string;
+  onModeChange?: (mode: "calendar" | "simple") => void;
+  onSpanChange?: (span: "day" | "week") => void;
   /** Extra classes applied to the outer wrapper (e.g. "flex-col" in sidebars). */
   className?: string;
 }
 
 export function TimetableViewPicker({
+  orgId,
+  anchor,
   mode,
   span,
+  roleId,
+  tagId,
   calendarHref,
   simpleHref,
   dayHref,
   weekHref,
+  onModeChange,
+  onSpanChange,
   className,
 }: TimetableViewPickerProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const hasHrefNavigation =
+    Boolean(calendarHref) &&
+    Boolean(simpleHref) &&
+    Boolean(dayHref) &&
+    Boolean(weekHref);
 
-  const navigate = (href: string, meta?: { mode?: string; span?: string }) =>
-    startTransition(() => {
-      if (meta) {
-        try {
-          if (meta.mode) localStorage.setItem("timetable:mode", meta.mode);
-          if (meta.span) localStorage.setItem("timetable:span", meta.span);
-        } catch {
-          /* ignore */
-        }
-      }
-      router.push(href);
-    });
+  function buildHref(nextMode: "calendar" | "simple", nextSpan: "day" | "week") {
+    if (hasHrefNavigation) {
+      if (nextMode === "calendar" && nextSpan === "day") return calendarHref!;
+      if (nextMode === "calendar" && nextSpan === "week") return dayHref!;
+      if (nextMode === "simple" && nextSpan === "day") return simpleHref!;
+      return weekHref!;
+    }
+
+    if (!orgId || !anchor) {
+      return "";
+    }
+
+    const params = new URLSearchParams({ anchor, mode: nextMode, span: nextSpan });
+    if (roleId) params.set("roleId", roleId);
+    if (tagId) params.set("tagId", tagId);
+    return `${anchor}?${params.toString()}`;
+  }
+
+  function setMode(nextMode: "calendar" | "simple") {
+    const nextHref = buildHref(nextMode, span);
+    if (nextHref) {
+      window.history.replaceState(null, "", nextHref);
+    }
+    onModeChange?.(nextMode);
+  }
+
+  function setSpan(nextSpan: "day" | "week") {
+    const nextHref = buildHref(mode, nextSpan);
+    if (nextHref) {
+      window.history.replaceState(null, "", nextHref);
+    }
+    onSpanChange?.(nextSpan);
+  }
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2",
-        isPending && "pointer-events-none opacity-50",
-        className,
-      )}
-    >
+    <div className={cn("flex items-center gap-2", className)}>
       {/* Day / Week */}
       <SegmentedControl
         options={[
-          { label: "Day", value: "day" },
-          { label: "Week", value: "week" },
+          {
+            label: (
+              <span className="flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5" />
+                Day
+              </span>
+            ),
+            value: "day",
+          },
+          {
+            label: (
+              <span className="flex items-center gap-1.5">
+                <CalendarRange className="h-3.5 w-3.5" />
+                Week
+              </span>
+            ),
+            value: "week",
+          },
         ]}
         value={span}
-        onChange={(v) =>
-          navigate(v === "day" ? dayHref : weekHref, { span: v })
-        }
+        onChange={(v) => setSpan(v as "day" | "week")}
+        size="sm"
       />
 
       {/* Calendar / Simple */}
       <SegmentedControl
         options={[
-          { label: "Calendar", value: "calendar" },
-          { label: "Simple", value: "simple" },
+          {
+            label: (
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                Calendar
+              </span>
+            ),
+            value: "calendar",
+          },
+          {
+            label: (
+              <span className="flex items-center gap-1.5">
+                <List className="h-3.5 w-3.5" />
+                Simple
+              </span>
+            ),
+            value: "simple",
+          },
         ]}
         value={mode}
-        onChange={(v) =>
-          navigate(v === "calendar" ? calendarHref : simpleHref, { mode: v })
-        }
+        onChange={(v) => setMode(v as "calendar" | "simple")}
+        size="sm"
       />
     </div>
   );

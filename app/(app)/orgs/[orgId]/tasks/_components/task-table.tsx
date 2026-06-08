@@ -9,8 +9,9 @@
  * All filtering params (sort, roleId, tagId, mode) come from URL-driven props.
  * Local search is debounced and triggers a fresh fetch from the start.
  */
-import { useState, useReducer, useTransition, useEffect, useRef, useCallback } from "react";
+import { useState, useReducer, useTransition, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useSupportsHover } from "@/hooks/use-hover-capability";
 import { usePersistedState } from "@/hooks/use-persisted-state";
 import { MoreHorizontal, ListTodo, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -96,7 +97,7 @@ type Task = {
   _count: { inheritedBy: number };
   eligibility: { role: { id: string; name: string; color: string | null } }[];
   tags: { tag: { id: string; name: string; color: string } }[];
-  imageSignedUrl: string | null;
+  imageSignedUrl?: string | null;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -109,6 +110,8 @@ interface TaskTableProps {
   filterRoleId: string | null;
   filterTagId: string | null;
   view: "list" | "card";
+  initialTasks: Task[];
+  initialNextCursor: string | null;
 }
 
 export function TaskTable({
@@ -119,13 +122,26 @@ export function TaskTable({
   filterRoleId,
   filterTagId,
   view,
+  initialTasks,
+  initialNextCursor,
 }: TaskTableProps) {
   const router = useRouter();
+  const supportsHover = useSupportsHover();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = usePersistedState(`tasks-search-${orgId}`, "");
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
-  // ── Pagination state ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [search]);
+
+  // The table keeps its own paginated result set so scrolling can append more
+  // rows without forcing a full route navigation or server round-trip.
   type PageState = {
     tasks: Task[];
     nextCursor: string | null;
@@ -164,12 +180,33 @@ export function TaskTable({
 
   const [{ tasks, nextCursor, isFetching, initialLoad }, dispatch] = useReducer(
     pageReducer,
-    { tasks: [], nextCursor: null, isFetching: false, initialLoad: true },
+    {
+      tasks: initialTasks,
+      nextCursor: initialNextCursor,
+      isFetching: false,
+      initialLoad: initialTasks.length === 0 && initialNextCursor === null,
+    },
   );
   const sentinelRef = useRef<HTMLDivElement>(null);
-  // Track the "reset key" — whenever filters change, reset and refetch from scratch.
+  // Tracks the latest fetch cycle. If filters change while a request   flight, older responses are ignored.
   const resetKeyRef = useRef(0);
+  const pageCacheRef = useRef<Record<string, { tasks: Task[]; nextCursor: string | null }>>({});
+  const initialQueryKeyRef = useRef(
+    [mode, sort, filterRoleId ?? "", filterTagId ?? "", ""].join("|")
+  );
+  const queryKey = useMemo(
+    () => [mode, sort, filterRoleId ?? "", filterTagId ?? "", debouncedSearch].join("|"),
+    [mode, sort, filterRoleId, filterTagId, debouncedSearch],
+  );
 
+  useEffect(() => {
+    pageCacheRef.current[initialQueryKeyRef.current] = {
+      tasks: initialTasks,
+      nextCursor: initialNextCursor,
+    };
+  }, [initialTasks, initialNextCursor]);
+
+  // Build the API URL from the current page state and optional cursor.
   const buildUrl = useCallback(
     (cursor: string | null | undefined) => {
       const url = new URL(
@@ -180,23 +217,39 @@ export function TaskTable({
       url.searchParams.set("sort", sort);
       if (filterRoleId) url.searchParams.set("roleId", filterRoleId);
       if (filterTagId) url.searchParams.set("tagId", filterTagId);
-      if (search) url.searchParams.set("search", search);
+      if (debouncedSearch) url.searchParams.set("search", debouncedSearch);
       if (cursor) url.searchParams.set("cursor", cursor);
       return url.toString();
     },
-    [orgId, mode, sort, filterRoleId, filterTagId, search],
+    [orgId, mode, sort, filterRoleId, filterTagId, debouncedSearch],
   );
 
-  // Reset and fetch first page whenever filters / mode change.
+  // When the query changes, keep the current rows visible, then swap in a
+  // cached or freshly fetched first page for the new query.
   useEffect(() => {
     const key = ++resetKeyRef.current;
-    dispatch({ type: "reset" });
+
+    const cachedPage = pageCacheRef.current[queryKey];
+    if (cachedPage) {
+      dispatch({
+        type: "loaded",
+        tasks: cachedPage.tasks,
+        nextCursor: cachedPage.nextCursor,
+      });
+      return;
+    }
+
+    dispatch({ type: "load_more" });
 
     let cancelled = false;
     fetch(buildUrl(null))
       .then((r) => r.json() as Promise<{ tasks: Task[]; nextCursor: string | null }>)
       .then((data) => {
         if (cancelled || resetKeyRef.current !== key) return;
+        pageCacheRef.current[queryKey] = {
+          tasks: data.tasks,
+          nextCursor: data.nextCursor,
+        };
         dispatch({ type: "loaded", tasks: data.tasks, nextCursor: data.nextCursor });
       })
       .catch(() => {
@@ -206,9 +259,9 @@ export function TaskTable({
     return () => {
       cancelled = true;
     };
-  }, [buildUrl]);
+  }, [buildUrl, queryKey]);
 
-  // Load next page — called by IntersectionObserver
+  // Fetch the next cursor page when the sentinel comes into view.
   const loadMore = useCallback(() => {
     if (isFetching || !nextCursor) return;
     const key = resetKeyRef.current;
@@ -225,7 +278,7 @@ export function TaskTable({
       });
   }, [isFetching, nextCursor, buildUrl]);
 
-  // IntersectionObserver on the sentinel at the bottom of the list
+  // Watch the bottom sentinel so the next page loads automatically on scroll.
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
@@ -241,6 +294,8 @@ export function TaskTable({
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
+  // Local mutations optimistically update the current page instead of waiting
+  // for the next fetch cycle to reconcile the row list.
   function handleDeleteClick(task: Task) {
     setDeleteTarget(task);
   }
@@ -291,8 +346,10 @@ export function TaskTable({
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const isEmpty = !initialLoad && tasks.length === 0;
+  // Empty state only appears after the first page has finished loading.
+  const isEmpty = !initialLoad && !isFetching && tasks.length === 0;
   const hasMore = !!nextCursor;
+  const showSkeleton = initialLoad || (isFetching && tasks.length === 0);
 
   return (
     <>
@@ -307,7 +364,7 @@ export function TaskTable({
       </RegisterPageToolbar>
 
       <div>
-        {initialLoad ? (
+        {showSkeleton ? (
           view === "card" ? (
             <TaskCardSkeleton count={6} />
           ) : (
@@ -604,7 +661,7 @@ export function TaskTable({
                   {/* Actions — hidden until hover */}
                   {canManageTasks && (
                     <div
-                      className="shrink-0 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity"
+                      className={`shrink-0 transition-opacity ${supportsHover ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100" : "opacity-100"}`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {task._available ? (
