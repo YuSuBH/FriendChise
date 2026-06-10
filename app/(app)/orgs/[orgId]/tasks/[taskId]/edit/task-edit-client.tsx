@@ -39,8 +39,6 @@ import {
   SearchableCombobox,
   type ComboboxItem,
 } from "@/components/ui/searchable-combobox";
-import { RegisterPageToolbar } from "@/components/layout/toolbar-context";
-import { RegisterPageSidebarSubContent } from "@/components/layout/page-sidebar-context";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,6 +53,7 @@ import { updateTaskAction, createTagOnlyAction } from "@/app/actions/tasks";
 import type { TaskFormState } from "@/app/actions/tasks";
 import { ImageUploadPanel } from "../../task-form";
 import type { Role, Tag } from "../../task-form";
+import { TaskEditorFrame } from "@/app/(app)/orgs/[orgId]/tasks/_components/task-editor-frame";
 
 // ─── Deferred Tag Panel ───────────────────────────────────────────────────────
 //
@@ -517,6 +516,9 @@ export function TaskEditClient({
 
   // ── Sidebar-controlled field state ────────────────────────────────────────
   const [color, setColor] = useState(defaultValues.color);
+  // Same state bridge as create mode: the description must survive sidebar
+  // rerenders and be re-injected into the submit payload explicitly.
+  const [description, setDescription] = useState(defaultValues.description ?? "");
   const [durationMin, setDurationMin] = useState(defaultValues.durationMin);
   const [startTimeMin, setStartTimeMin] = useState<number | null>(
     defaultValues.preferredStartTimeMin ?? null,
@@ -615,6 +617,8 @@ export function TaskEditClient({
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    // Prefer the in-memory description over the editor's serialized field.
+    fd.set("description", description);
     startTransition(() => dispatch(fd));
   };
 
@@ -646,9 +650,6 @@ export function TaskEditClient({
 
   return (
     <>
-      {/* ── Sidebar: metadata fields ──────────────────────────────────────── */}
-      <RegisterPageSidebarSubContent content={sidebarContent} />
-
       {/* ── Unsaved-changes confirmation dialog ──────────────────────────── */}
       <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <AlertDialogContent>
@@ -673,43 +674,46 @@ export function TaskEditClient({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Toolbar: navigation + save/discard ───────────────────────────── */}
-      <RegisterPageToolbar>
-        <button
-          type="button"
-          onClick={() => attemptLeave(`/orgs/${orgId}/tasks/${taskId}`)}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-        >
-          ← Task
-        </button>
-        <div className="ml-auto flex items-center gap-2">
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={() => attemptLeave(`/orgs/${orgId}/tasks/${taskId}`)}
-            disabled={pending}
-          >
-            Discard
-          </Button>
-          <Button
-            type="submit"
-            form="task-edit-form"
-            size="sm"
-            disabled={pending}
-          >
-            {pending ? "Saving…" : "Save changes"}
-          </Button>
-        </div>
-      </RegisterPageToolbar>
-
-      {/* ── Main form ─────────────────────────────────────────────────────── */}
-      <form
-        ref={formRef}
-        id="task-edit-form"
-        onSubmit={handleSubmit}
-        className="w-full max-w-3xl mx-auto flex flex-col gap-6"
+      <TaskEditorFrame
+        sidebarContent={sidebarContent}
+        toolbarContent={
+          <>
+            <button
+              type="button"
+              onClick={() => attemptLeave(`/orgs/${orgId}/tasks/${taskId}`)}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              ← Task
+            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => attemptLeave(`/orgs/${orgId}/tasks/${taskId}`)}
+                disabled={pending}
+              >
+                Discard
+              </Button>
+              <Button
+                type="submit"
+                form="task-edit-form"
+                size="sm"
+                disabled={pending}
+              >
+                {pending ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </>
+        }
       >
+        {/* ── Main form ─────────────────────────────────────────────────────── */}
+        <form
+          ref={formRef}
+          id="task-edit-form"
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-6"
+        >
         {/* Hidden inputs for sidebar-controlled fields */}
         <input type="hidden" name="color" value={color} />
         <input type="hidden" name="durationMin" value={durationMin} />
@@ -760,7 +764,10 @@ export function TaskEditClient({
             defaultValue={defaultValues.description}
             placeholder="Add details, steps, or notes…"
             minHeightClass="min-h-80"
-            onChange={markDirty}
+            onChange={(value) => {
+              setDescription(value);
+              markDirty();
+            }}
             ariaLabel="Description"
             ariaInvalid={!!err("description")}
             ariaDescribedBy={
@@ -792,7 +799,8 @@ export function TaskEditClient({
             onDirty={markDirty}
           />
         </div>
-      </form>
+        </form>
+      </TaskEditorFrame>
     </>
   );
 }

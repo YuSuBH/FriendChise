@@ -11,6 +11,10 @@ import {
   getTemplateEntries,
   getToolItemLists,
 } from "@/lib/services/tools";
+import {
+  RECENT_ACTIVITY_CATEGORY,
+  recordRecentActivity,
+} from "@/lib/services/recent-activity";
 import { SetSidebarContent } from "./_components/set-sidebar-content";
 import { SetDetailClient } from "./set-detail-client";
 
@@ -34,6 +38,16 @@ export default async function ConversionSetPage({
   ]);
 
   if (!set) notFound();
+
+  void recordRecentActivity({
+    orgId,
+    category: RECENT_ACTIVITY_CATEGORY.TOOLS,
+    entityKey: set.id,
+    entityName: set.name,
+    entityHref: `/orgs/${orgId}/tools/conversion/${set.id}`,
+  }).catch((err) => {
+    console.error("Failed to record recent activity:", err);
+  });
 
   // Ensure every set has a "Default" template
   await prisma.conversionTemplate.upsert({

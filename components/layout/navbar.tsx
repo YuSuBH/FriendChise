@@ -17,6 +17,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getPublicUrl } from "@/lib/supabase-storage";
+import { isAdminUser } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import { OrgSwitcher } from "@/components/layout/org-switcher";
 import { MobileSidebarTrigger } from "@/components/layout/sidebar";
@@ -87,33 +88,56 @@ export const NavBar = async () => {
       })
     : [[], 0, [], 0];
 
+  const canAccessAdmin = user?.email ? await isAdminUser(user.email) : false;
+
   return (
     <header
-      className="sticky top-0 z-20 min-h-12 border-b border-border bg-card flex items-end justify-between pr-4 pl-0 pb-0"
+      className="sticky top-0 z-20 border-b border-border/60 bg-card/85 backdrop-blur-xl supports-backdrop-filter:bg-card/70"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
-      {/* inner row always 3rem (h-12) tall */}
-      <div className="flex w-full items-center justify-between h-12">
-        {/* Left: logo + mobile menu trigger + org switcher */}
-        <div className="flex items-center gap-2 min-w-0 pl-3 md:pl-0">
+      <div className="flex h-14 w-full items-center justify-between gap-3 px-3 sm:px-4 lg:px-6">
+        {/* Left: branded home link + mobile menu trigger + org switcher */}
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Button
             variant="ghost"
             asChild
-            className="h-auto px-2 py-1.5 rounded-md hidden md:flex hover:bg-accent hover:text-foreground transition-colors"
+            className="hidden md:flex h-9 shrink-0 items-center rounded-full border border-border/70 bg-background/85 px-2 pl-1.25 pr-2.5 text-foreground shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-background hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2"
           >
-            <Link href="/">
-              <Logo className="text-current" />
+            <Link href="/" aria-label="Go to home" className="flex items-center gap-1.5">
+              <Logo />
+              <span className="hidden xl:flex flex-col items-start leading-none">
+                <span className="text-[13px] font-semibold tracking-tight text-foreground/90">
+                  FriendChise
+                </span>
+                <span
+                  className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
+                  style={{ marginTop: 1 }}
+                >
+                  Home
+                </span>
+              </span>
             </Link>
           </Button>
           <MobileSidebarTrigger />
-          <OrgSwitcher orgs={orgs} />
+          <div className="min-w-0">
+            <OrgSwitcher orgs={orgs} />
+          </div>
         </div>
 
-        {/* Right: notifications and user menu */}
-        <div className="flex items-center gap-2">
-          {/* Feedback */}
+        {/* Right: quick actions and user menu */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {canAccessAdmin && (
+            <Button
+              variant="outline"
+              asChild
+              className="hidden sm:flex h-9 rounded-full px-3 text-xs font-semibold"
+            >
+              <Link href="/admin" aria-label="Open admin panel">
+                Admin
+              </Link>
+            </Button>
+          )}
           <FeedbackButton />
-
           {/* Notification bell */}
           <NotificationPanel
             invites={invites}
@@ -130,9 +154,9 @@ export const NavBar = async () => {
                   variant="ghost"
                   size="icon"
                   aria-label="Open user menu"
-                  className="h-9 w-9 rounded-full hover:bg-accent p-0 flex items-center justify-center"
+                  className="h-9 w-9 rounded-full border border-border/70 bg-background/85 p-0 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-background hover:shadow-md"
                 >
-                  <div className="h-7 w-7 rounded-full bg-primary hover:bg-primary/90 overflow-hidden flex items-center justify-center">
+                  <div className="h-7 w-7 rounded-full bg-primary overflow-hidden flex items-center justify-center">
                     {user.image ? (
                       <Image
                         src={user.image}
@@ -157,6 +181,11 @@ export const NavBar = async () => {
                   )}
                 </div>
                 <DropdownMenuSeparator />
+                {canAccessAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin">Admin panel</Link>
+                  </DropdownMenuItem>
+                )}
                 {/* TODO: restore <DropdownMenuItem asChild><Link href="/profile">Profile</Link></DropdownMenuItem> when profile page is implemented */}
                 <DropdownMenuItem disabled>Profile</DropdownMenuItem>
                 {/* TODO: restore <DropdownMenuItem asChild><Link href="/settings/account">Account Settings</Link></DropdownMenuItem> when account settings page is implemented */}

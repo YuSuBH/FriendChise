@@ -73,6 +73,7 @@ import {
   setTaskTags,
   createTag,
 } from "@/lib/services/tags";
+import { saveTaskImagePath } from "@/app/actions/storage";
 import { createTaskSchema, updateTaskSchema } from "@/lib/validators/task";
 import { checkDemoLimit } from "@/lib/demo";
 import { revalidatePath } from "next/cache";
@@ -159,6 +160,23 @@ export async function createTaskAction(
     authz.userEmail,
     creatorName ?? null,
   );
+  const imageStoragePath = formData.get("imageStoragePath");
+  if (typeof imageStoragePath === "string" && imageStoragePath.trim()) {
+    const imageResult = await saveTaskImagePath(
+      orgId,
+      task.id,
+      imageStoragePath,
+    );
+    if (!imageResult.ok) {
+      // Rollback: delete the partially-created task
+      try {
+        await deleteTask(orgId, task.id, authz.userId, authz.userEmail);
+      } catch (deleteErr) {
+        console.error("Failed to rollback task creation:", deleteErr);
+      }
+      return { ok: false, errors: { _: [imageResult.error] } };
+    }
+  }
   const roleIds = formData
     .getAll("roleIds")
     .filter((v): v is string => typeof v === "string");
