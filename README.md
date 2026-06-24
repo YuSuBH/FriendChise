@@ -49,5 +49,5 @@ If you want to help improve FriendChise:
 If you are new here, start with the docs site and follow the setup flow from the Getting Started page.
 
 - Docs: [friendchise.app/doc](https://friendchise.app/doc)
-- Getting Started: [friendchise.app/doc/getting-started](https://friendchise.app/doc/getting-started)
+- Getting Started: [friendchise.app/doc/getting-started](https://friendchise.app/doc/contributing/getting-started)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
