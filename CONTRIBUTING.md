@@ -1,18 +1,16 @@
 # Contributing to FriendChise
 
-Thanks for helping improve FriendChise.
-
-If this project helps you, please star the repo, follow my work, and share it.
+Once again, thanks for helping improve FriendChise.
 
 ## 1. Start with an issue
 
-Open a GitHub issue before a PR if the change is larger than a small bug fix. That keeps the work focused and avoids duplicate effort.
+Either pick an issue posted or submit an issue you wish to work on and wait for approval. Depending on the issue, we expect completion within 2 days before assigning the issue to someone else.
 
 If you are looking for ideas, see [Ideas for Contributing](https://friendchise.app/doc/contributing/ideas-for-contribution).
 
 ## 2. Follow the exact setup steps
 
-If you want the shorter overview, see [Quick Start](https://friendchise.app/doc/development/quick-start). If you are new, follow the steps below exactly; that guide shows the exact local path, including Docker commands for macOS/Linux and Windows.
+[Quick Start](https://friendchise.app/doc/development/quick-start) has a video if you wish.
 
 ### 2.1 Fork and clone the repo
 
@@ -20,8 +18,6 @@ If you want the shorter overview, see [Quick Start](https://friendchise.app/doc/
 git clone https://github.com/IvanTran-2001/FriendChise.git
 cd FriendChise
 ```
-
-If you already have the repo open, just use the folder you already cloned.
 
 ### 2.2 Start a local Postgres database
 
@@ -47,8 +43,6 @@ docker run --name friendchise-postgres `
   -d postgres:16
 ```
 
-If you already have Postgres installed locally, use that instead. The important part is that `DATABASE_URL` points to your local database, not Supabase.
-
 ### 2.3 Create `.env.local`
 
 Create `.env.local` in the repo root with these values:
@@ -59,13 +53,11 @@ AUTH_SECRET=your-generated-secret-here
 AUTH_URL=http://localhost:3000
 ```
 
-If you do not have an auth secret yet, generate one:
+If you do not have an auth secret yet, generate one and copy and replace `your-generated-secret-here`
 
 ```bash
 npx auth secret
 ```
-
-If you are working against a shared Supabase-backed dev environment, keep the same env vars in `.env.local` and provision that database separately. If you need namespaced seed data, also set `SEED_NAMESPACE`.
 
 ### 2.4 Install, migrate, generate, and seed
 
@@ -77,10 +69,7 @@ pnpm prisma migrate dev
 pnpm prisma generate
 pnpm seed
 ```
-
-If you already restored a snapshot that contains data, `pnpm seed` is still safe to run and will namespace the seed data for your local environment.
-
-If the schema is out of sync, rerun `pnpm prisma migrate dev`.
+If you ever have an application error or out of sync rerun the whole thing especially after a huge update.
 
 ### 2.5 Start the app
 
@@ -90,34 +79,13 @@ pnpm dev
 
 Then open [localhost:3000/signin](http://localhost:3000/signin) and use either:
 
-- the seeded dev user picker
-- the demo button for an isolated demo org
+## 3. Pull requests
 
-No app password is required. The data you edit goes into your local Postgres database only.
-
-## 3. Working rules
-
-- Keep `.env.local` private. Never commit it.
-- Keep production secrets out of the repo.
-- Do not point seed commands at production data.
-- Use `SEED_NAMESPACE=random` for disposable local runs.
-- Use `pnpm seed:clean` if you need to remove only your namespaced seed data.
-- Keep the Supabase storage vars set before running the app locally if you need logos, images, or uploads.
-- If you change Prisma models, create a migration with `pnpm prisma migrate dev --name <migration-name>`.
-
-## 4. Testing
-
-- `pnpm test` runs the Vitest suite.
-- `pnpm test:integration` runs integration tests.
-- `pnpm test:e2e` runs Playwright.
-- `pnpm lint` runs ESLint.
-- `pnpm exec tsc --noEmit` runs a typecheck.
-
-E2E and integration tests depend on seeded data, so keep new test data namespaced or disposable.
-
-## 5. Pull requests
-
+- First of, everything should be in our dedicated [doc](https://friendchise.app/doc) 
 - Keep PRs focused on one change when possible.
-- Include tests for behavior changes.
-- Update docs when setup or contributor flow changes.
-- Avoid unrelated refactors in the same PR.
+- Update docs if huge change or worth mentioning to help other developers
+- Avoid unrelated refactors in the same PR. Just make a different PR.
+
+## 4. Congrats
+
+You have pretty muchly all the baseline setup. Good luck and thanks for contributing.
