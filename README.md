@@ -5,24 +5,33 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16.1.6-black?logo=next.js)](https://nextjs.org)
 [![Deploy](https://img.shields.io/badge/deploy-friendchise.app-brightgreen)](https://friendchise.app)
 
-Improve consistency across franchise operations through shared wisdom, optimal tools, and effective visuals. FriendChise gives parent organizations a single place to manage tasks, timetables, roles, tools, and collaboration across franchise locations.
+The idea of friendchise is to **"make every location your best one"**. A software built to help make franchising easier!
 
 Production deployment: **[friendchise.app](https://friendchise.app)**
 
-## Links
+## Help you and me by staring the repo!
+The more stars this project gets, the more recognition and weight this project will hold which will benefit all of us contributing. So, if you like the project:
+ - Give a star for the repo,
+ - Connect with [me on LinkedIn](https://www.linkedin.com/in/ivan-tran-76164017a/)
+ - Share on your linkedin or any other social media. Or even simply talking to your friends about it.
+ - Follow [FriendChise company page](https://www.linkedin.com/company/friendchise-app/)
 
-- Website: [friendchise.app](https://friendchise.app)
-- GitHub: [IvanTran-2001/FriendChise](https://github.com/IvanTran-2001/FriendChise)
-- Docs: [friendchise.app/doc](https://friendchise.app/doc)
-- LinkedIn: [FriendChise company page](https://www.linkedin.com/company/friendchise-app/)
+## Quick-Setup
 
-Follow FriendChise on LinkedIn for product updates and launch news.
+Read the setup flow in [quick-setup](https://friendchise.app/doc/contributing/getting-started). 
 
-If you like the project, please star the repo, follow me on LinkedIn, and share FriendChise.
+## Contribute
+
+If you want to help build something meaningful in FriendChise:
+
+1. Open an issue first to discuss the idea.
+2. Check [CONTRIBUTING.md](CONTRIBUTING.md).
+3. Read [Ideas for Contributing](https://friendchise.app/doc/contributing/ideas-for-contribution) if you are stuck.
+4. Star the repo if you like the project.
 
 ## Docs
 
-The full docs now live in the in-app docs site at [friendchise.app/doc](https://friendchise.app/doc).
+Dedicated doc at [friendchise.app/doc](https://friendchise.app/doc). Should have everything needed for the project.
 
 ## Tech Stack
 
@@ -30,24 +39,4 @@ The full docs now live in the in-app docs site at [friendchise.app/doc](https://
 - pnpm, Prisma ORM v7, PostgreSQL (local or Supabase-hosted), Supabase Storage
 - Auth.js v5, Tailwind CSS v4, shadcn/ui, Radix UI
 - Vitest, Playwright, Sentry, Upstash Redis
-
-## Getting Started
-
-Read the setup flow in [friendchise.app/doc/contributing/getting-started](https://friendchise.app/doc/contributing/getting-started). It covers local Postgres, the required Supabase storage env vars, and the dev commands in order.
-
-## Contribute
-
-If you want to help improve FriendChise:
-
-1. Open an issue first to discuss the idea.
-2. Check [CONTRIBUTING.md](CONTRIBUTING.md).
-3. Read [Ideas for Contributing](https://friendchise.app/doc/contributing/ideas-for-contribution) for examples.
-4. Star the repo if you like the project.
-
-## Support
-
-If you are new here, start with the docs site and follow the setup flow from the Getting Started page.
-
-- Docs: [friendchise.app/doc](https://friendchise.app/doc)
-- Getting Started: [friendchise.app/doc/getting-started](https://friendchise.app/doc/contributing/getting-started)
-- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+  
