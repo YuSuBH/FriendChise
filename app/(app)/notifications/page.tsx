@@ -75,7 +75,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                 Previous
               </Link>
             ) : (
-              <span>
+              <span className="flex items-center justify-center gap-1">
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 Previous
               </span>
@@ -96,9 +96,9 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                 <ChevronRight className="h-4 w-4 ml-1" />
               </Link>
             ) : (
-              <span>
+              <span className="flex items-center justify-center gap-1">
                 Next
-                <ChevronRight className="h-4 w-4 ml-1" />
+                <ChevronRight className="h-4 w-4" />
               </span>
             )}
           </Button>
